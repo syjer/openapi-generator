@@ -2217,5 +2217,104 @@ public class OpenAPINormalizerTest {
         assertNotNull(errorsValue.getItems());
     }
 
+    @Test
+    public void testOpenAPINormalizerModelsRequiredOnly() {
+        OpenAPI openAPI = TestUtils.parseSpec("src/test/resources/3_0/models-required-only.yaml");
+
+        Map<String, String> options = Map.of(
+            "FILTER", "operationId:list",
+            "FILTER_MODELS", "required-only"
+        );
+        OpenAPINormalizer openAPINormalizer = new OpenAPINormalizer(openAPI, options);
+        openAPINormalizer.normalize();
+        openAPINormalizer.normalizeModels();
+
+        // Person is required by operation "list", so it should NOT be marked as internal
+        Schema personSchema = openAPI.getComponents().getSchemas().get("Person");
+        assertNotNull(personSchema);
+        if (personSchema.getExtensions() != null) {
+            assertNotEquals(personSchema.getExtensions().get(X_INTERNAL), true);
+        }
+
+        // PersonA inherits from Person, so it should also be kept (NOT marked as internal)
+        Schema personASchema = openAPI.getComponents().getSchemas().get("PersonA");
+        assertNotNull(personASchema);
+        if (personASchema.getExtensions() != null) {
+            assertNotEquals(personASchema.getExtensions().get(X_INTERNAL), true);
+        }
+
+        // PersonB inherits from PersonA, so it should also be kept (NOT marked as internal)
+        Schema personBSchema = openAPI.getComponents().getSchemas().get("PersonB");
+        assertNotNull(personASchema);
+        if (personBSchema.getExtensions() != null) {
+            assertNotEquals(personBSchema.getExtensions().get(X_INTERNAL), true);
+        }
+
+        // UnusedSchema is NOT required by operation "list", so it should be marked as internal
+        Schema unusedSchemaAfter = openAPI.getComponents().getSchemas().get("UnusedSchema");
+        assertNotNull(unusedSchemaAfter);
+        assertNotNull(unusedSchemaAfter.getExtensions());
+        assertEquals(unusedSchemaAfter.getExtensions().get(X_INTERNAL), true);
+    }
+
+    @Test
+    public void testOpenAPINormalizerModelsRequiredOnlyWithInlineSchemas() {
+        OpenAPI openAPI = TestUtils.parseSpec("src/test/resources/3_0/models-required-only_inline.yaml");
+
+        Map<String, String> options = Map.of(
+            "FILTER", "operationId:listItems",
+            "FILTER_MODELS", "required-only"
+        );
+        OpenAPINormalizer openAPINormalizer = new OpenAPINormalizer(openAPI, options);
+        openAPINormalizer.normalize();
+
+        // run InlineModelResolver to flatten inline schemas into components/schemas
+        InlineModelResolver inlineModelResolver = new InlineModelResolver();
+        inlineModelResolver.flatten(openAPI);
+
+        // now run normalizeModels after inline resolution (matches DefaultGenerator pipeline)
+        openAPINormalizer.normalizeModels();
+
+        Map<String, Schema> schemas = openAPI.getComponents().getSchemas();
+
+        // Item is directly $ref'd by the listItems operation, should NOT be internal
+        Schema itemSchema = schemas.get("Item");
+        assertNotNull(itemSchema);
+        if (itemSchema.getExtensions() != null) {
+            assertNotEquals(itemSchema.getExtensions().get(X_INTERNAL), true);
+        }
+
+        // Category is referenced by Item (which is required), so transitively required
+        Schema categorySchema = schemas.get("Category");
+        assertNotNull(categorySchema);
+        if (categorySchema.getExtensions() != null) {
+            assertNotEquals(categorySchema.getExtensions().get(X_INTERNAL), true);
+        }
+
+        // The inline response schema from GET /items should have been promoted
+        // to a named schema by InlineModelResolver (e.g. "_items_get_200_response").
+        // It should NOT be marked as internal since it belongs to the listItems operation.
+        Schema inlineResponseSchema = null;
+        for (Map.Entry<String, Schema> entry : schemas.entrySet()) {
+            String name = entry.getKey();
+            if (!name.equals("Item") && !name.equals("Category") && !name.equals("UnusedModel")) {
+                inlineResponseSchema = entry.getValue();
+                assertNotNull(inlineResponseSchema, "Inline response schema should exist: " + name);
+                if (inlineResponseSchema.getExtensions() != null) {
+                    assertNotEquals(inlineResponseSchema.getExtensions().get(X_INTERNAL), true,
+                        "Inline response schema '" + name + "' should NOT be marked as internal");
+                }
+            }
+        }
+        // InlineModelResolver should have created at least one new schema
+        assertNotNull(inlineResponseSchema, "Expected InlineModelResolver to create a named schema from the inline response");
+
+        // UnusedModel is not referenced by listItems, should be marked as internal
+        Schema unusedModel = schemas.get("UnusedModel");
+        assertNotNull(unusedModel);
+        assertNotNull(unusedModel.getExtensions());
+        assertEquals(unusedModel.getExtensions().get(X_INTERNAL), true);
+    }
+
 }
 

@@ -1,0 +1,61 @@
+openapi: 3.0.1
+info:
+  version: 1.0.0
+  title: Inline Schema Test
+  license:
+    name: MIT
+servers:
+  - url: http://api.example.xyz/v1
+paths:
+  /items:
+    get:
+      operationId: listItems
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Item"
+  /categories:
+    get:
+      operationId: listCategories
+      x-internal: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+components:
+  schemas:
+    Item:
+      description: An item
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          $ref: "#/components/schemas/Category"
+    Category:
+      description: A category
+      type: object
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+    UnusedModel:
+      description: Not referenced anywhere
+      type: object
+      properties:
+        data:
+          type: string

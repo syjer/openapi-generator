@@ -147,6 +147,9 @@ public class OpenAPINormalizer {
     // when set (e.g. operationId:getPetById|addPet), filter out (or remove) everything else
     final String FILTER = "FILTER";
 
+    // when set (FILTER_MODELS=required-only), restrict models to only those required by non-internal operations
+    final String FILTER_MODELS = "FILTER_MODELS";
+
     // when set (e.g. type:http|oauth2), filter out (or remove) everything else
     final String SECURITY_SCHEMES_FILTER = "SECURITY_SCHEMES_FILTER";
 
@@ -264,6 +267,7 @@ public class OpenAPINormalizer {
         ruleNames.add(NORMALIZE_31SPEC);
         ruleNames.add(REMOVE_X_INTERNAL);
         ruleNames.add(FILTER);
+        ruleNames.add(FILTER_MODELS);
         ruleNames.add(SECURITY_SCHEMES_FILTER);
         ruleNames.add(SET_CONTAINER_TO_NULLABLE);
         ruleNames.add(SET_PRIMITIVE_TYPES_TO_NULLABLE);
@@ -2745,6 +2749,61 @@ public class OpenAPINormalizer {
             // any properties
             if (schema.getType() != null && !ModelUtils.isObjectTypeOAS30(schema)) {
                 schema.setProperties(null);
+            }
+        }
+    }
+
+    /**
+     * Normalize models, currently the only existing rule is the 'required-only' which works in conjunction with
+     * the FILTER endpoints one.
+     * This method must be called after the inlining of the models.
+     */
+    protected void normalizeModels() {
+        if ("required-only".equals(inputRules.get(FILTER_MODELS))) {
+            processNormalizeModelsRequiredOnly();
+        }
+    }
+
+    private void processNormalizeModelsRequiredOnly() {
+        Paths paths = openAPI.getPaths();
+        if (paths == null) {
+            return;
+        }
+        Set<String> referencedSchemas = new HashSet<>();
+        Map<String, List<String>> childrenMap = ModelUtils.getChildrenMap(openAPI);
+
+        // we visit only the operations that are _not_ marked as x-internal: true
+        // by the FILTER option.
+        ModelUtils.visitOpenAPI(openAPI, (schema, mimeType) -> {
+            if (schema.get$ref() != null) {
+                String ref = ModelUtils.getSimpleRef(schema.get$ref());
+                addReferencedSchema(ref, childrenMap, referencedSchemas);
+            }
+        }, operation -> !(operation.getExtensions() != null && Boolean.TRUE.equals(operation.getExtensions().get(X_INTERNAL))));
+
+        // set all non referenced schema as x-internal: true
+        Map<String, Schema> schemas = ModelUtils.getSchemas(openAPI);
+        if (schemas == null) {
+            return;
+        }
+        for (Map.Entry<String, Schema> entry : schemas.entrySet()) {
+            String schemaName = entry.getKey();
+            Schema schema = entry.getValue();
+            if (schema != null && !referencedSchemas.contains(schemaName)) {
+                schema.addExtension(X_INTERNAL, true);
+                LOGGER.info("Model {} marked as internal (x-internal: true) since rule MODELS=required-only is enabled and it is not required by any generated API", schemaName);
+            }
+        }
+    }
+
+    private static void addReferencedSchema(String schemaName, Map<String, List<String>> childrenMap, Set<String> referencedSchemas) {
+        if (schemaName == null) {
+            return;
+        }
+        referencedSchemas.add(schemaName);
+        if (childrenMap.containsKey(schemaName)) {
+            for (String childName : childrenMap.get(schemaName)) {
+                addReferencedSchema(childName, childrenMap, referencedSchemas);
             }
         }
     }

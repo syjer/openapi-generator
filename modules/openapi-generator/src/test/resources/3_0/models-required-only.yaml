@@ -1,0 +1,113 @@
+openapi: 3.0.1
+info:
+  title: Example
+  license:
+    name: MIT
+  version: 1.0.0
+servers:
+  - url: http://api.example.xyz/v1
+paths:
+  /v1/person:
+    get:
+      operationId: list
+      responses:
+        "200":
+          description: OK
+  /v2/person:
+    get:
+      operationId: list
+      responses:
+        "200":
+          description: OK
+  /person/display/{personId}:
+    get:
+      tags:
+        - person
+        - basic
+      operationId: list
+      parameters:
+        - name: personId
+          in: path
+          description: The id of the person to retrieve
+          required: true
+          style: simple
+          explode: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
+    put:
+      tags:
+        - person
+      operationId: put
+      parameters:
+        - name: personId
+          in: path
+          description: The id of the person to retrieve
+          required: true
+          style: simple
+          explode: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
+      x-role: admin
+    delete:
+      tags:
+        - person
+      operationId: delete
+      parameters:
+        - name: personId
+          in: path
+          description: The id of the person to retrieve
+          required: true
+          style: simple
+          explode: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
+      x-internal: true
+components:
+  schemas:
+    Person:
+      type: object
+      properties:
+        $_type:
+          type: string
+        lastName:
+          type: string
+        firstName:
+          type: string
+      description: person
+      x-parent: true
+    Dummy:
+      type: object
+      properties:
+        test:
+          type: string
+      description: to test x-internal
+      x-internal: true
+    UnusedSchema:
+      type: object
+    PersonA:
+      allOf:
+        - $ref: "#/components/schemas/Person"
+    PersonB:
+      allOf:
+        - $ref: "#/components/schemas/PersonA"

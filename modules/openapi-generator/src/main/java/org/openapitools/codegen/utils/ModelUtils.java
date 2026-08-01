@@ -58,6 +58,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.openapitools.codegen.CodegenConstants.X_NULLABLE;
@@ -226,30 +227,38 @@ public class ModelUtils {
         return schemasUsedInFormParam.stream().filter(n -> !schemasUsedInOtherCases.contains(n)).collect(Collectors.toList());
     }
 
+    private static void visitOpenAPI(OpenAPI openAPI, OpenAPISchemaVisitor visitor) {
+        visitOpenAPI(openAPI, visitor, (v) -> true);
+    }
+
     /**
-     * Private method used by several methods ({@link #getAllUsedSchemas(OpenAPI)},
+     * Used by several methods ({@link #getAllUsedSchemas(OpenAPI)},
      * {@link #getUnusedSchemas(OpenAPI)},
      * {@link #getSchemasUsedOnlyInFormParam(OpenAPI)}, ...) to traverse all paths of an
      * OpenAPI instance and call the visitor functional interface when a schema is found.
      *
      * @param openAPI specification
      * @param visitor functional interface (can be defined as a lambda) called each time a schema is found.
+     * @param operationPredicate predicate that check if the given operation should be visited
      */
-    private static void visitOpenAPI(OpenAPI openAPI, OpenAPISchemaVisitor visitor) {
+    public static void visitOpenAPI(OpenAPI openAPI, OpenAPISchemaVisitor visitor, Predicate<Operation> operationPredicate) {
         Map<String, PathItem> paths = openAPI.getPaths();
         List<String> visitedSchemas = new ArrayList<>();
 
         if (paths != null) {
             for (PathItem path : paths.values()) {
-                visitPathItem(path, openAPI, visitor, visitedSchemas);
+                visitPathItem(path, openAPI, visitor, visitedSchemas, operationPredicate);
             }
         }
     }
 
-    private static void visitPathItem(PathItem pathItem, OpenAPI openAPI, OpenAPISchemaVisitor visitor, List<String> visitedSchemas) {
+    private static void visitPathItem(PathItem pathItem, OpenAPI openAPI, OpenAPISchemaVisitor visitor, List<String> visitedSchemas, Predicate<Operation> operationPredicate) {
         List<Operation> allOperations = pathItem.readOperations();
         if (allOperations != null) {
             for (Operation operation : allOperations) {
+                if (!operationPredicate.test(operation)) {
+                    continue;
+                }
                 //Params:
                 visitParameters(openAPI, operation.getParameters(), visitor, visitedSchemas);
 
@@ -284,7 +293,7 @@ public class ModelUtils {
                         Callback callback = getReferencedCallback(openAPI, c);
                         if (callback != null) {
                             for (PathItem p : callback.values()) {
-                                visitPathItem(p, openAPI, visitor, visitedSchemas);
+                                visitPathItem(p, openAPI, visitor, visitedSchemas, operationPredicate);
                             }
                         }
                     }
@@ -2871,7 +2880,7 @@ public class ModelUtils {
     }
 
     @FunctionalInterface
-    private interface OpenAPISchemaVisitor {
+    public interface OpenAPISchemaVisitor {
 
         void visit(Schema schema, String mimeType);
     }

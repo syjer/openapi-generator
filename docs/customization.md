@@ -730,6 +730,13 @@ java -jar modules/openapi-generator-cli/target/openapi-generator-cli.jar generat
   --openapi-normalizer FILTER="operationId:addPet|getPetById ; tag:store"
 ```
 
+- `FILTER_MODELS`: when set to `required-only` in combination with the `FILTER` rules, it will only generate model files that are needed by the selected API operations.
+
+Example:
+```
+java -jar modules/openapi-generator-cli/target/openapi-generator-cli.jar generate -g java -i modules/openapi-generator/src/test/resources/3_0/enableKeepOnlyFirstTagInOperation_test.yaml -o /tmp/java/ --openapi-normalizer FILTER=operationId:list,FILTER_MODELS=required-only
+```
+
 - `SET_CONTAINER_TO_NULLABLE`: When set to `array|set|map` (or just `array`) for example, it will set `nullable` in array, set and map to true.
 
 Example:

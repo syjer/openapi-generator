@@ -257,13 +257,14 @@ public class DefaultGenerator implements Generator {
         }
 
         // normalize the spec
+        OpenAPINormalizer openapiNormalizer = null;
         try {
             if (config.getUseOpenapiNormalizer()) {
                 SemVer version = new SemVer(openAPI.getOpenapi());
                 if (version.atLeast("3.1.0")) {
                     config.openapiNormalizer().put("NORMALIZE_31SPEC", "true");
                 }
-                OpenAPINormalizer openapiNormalizer = OpenAPINormalizer.createNormalizer(openAPI, config.openapiNormalizer());
+                openapiNormalizer = OpenAPINormalizer.createNormalizer(openAPI, config.openapiNormalizer());
                 openapiNormalizer.normalize();
             }
         } catch (Exception e) {
@@ -277,6 +278,16 @@ public class DefaultGenerator implements Generator {
             inlineModelResolver.setInlineSchemaOptions(config.inlineSchemaOption());
 
             inlineModelResolver.flatten(openAPI);
+        }
+
+        // normalize models after inline model resolution, so that inline schemas
+        // that were promoted to named schemas in components/schemas are properly handled
+        if (openapiNormalizer != null) {
+            try {
+                openapiNormalizer.normalizeModels();
+            } catch (Exception e) {
+                LOGGER.error("An exception occurred in OpenAPI Normalizer (models). Please report the issue via https://github.com/openapitools/openapi-generator/issues/new/: ", e);
+            }
         }
 
         config.preprocessOpenAPI(openAPI);
